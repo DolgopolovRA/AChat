@@ -18,9 +18,8 @@ def incoming_message(msg):
     msg_from_client = json.loads(msg.decode('utf-8'))
     if type(msg_from_client) is dict:
         if msg_from_client.get('action') == 'presence' and msg_from_client.get('time'):
-            print(msg_from_client)
-            return {'responce': 200, 'time': time.time()}
-    return {'responce': 400, 'time': time.time()}
+            return msg_from_client, {'responce': 200, 'time': time.time()}
+    return '', {'responce': 400, 'time': time.time()}
 
 
 def outgoing_message(answer):
@@ -59,7 +58,9 @@ def main():
     while True:
         client, addr = s.accept()
         msg = client.recv(1024)
-        status = incoming_message(msg)
+        msg_from_client, status = incoming_message(msg)
+        if msg_from_client:
+            print(msg_from_client)
         client.send(outgoing_message(status))
         client.close()
 
