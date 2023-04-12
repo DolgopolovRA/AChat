@@ -11,7 +11,7 @@ def outgoing_message():
 
 def incoming_message(msg):
     dct = json.loads(msg.decode('utf-8'))
-    print(dct)
+    return dct
 
 
 def main():
@@ -30,7 +30,7 @@ def main():
     s.connect((addr, port))
     s.send(outgoing_message())
     msg = s.recv(1024)
-    incoming_message(msg)
+    print(incoming_message(msg))
     s.close()
 
 
