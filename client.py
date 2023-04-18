@@ -4,21 +4,29 @@ import json
 from socket import *
 import logging
 import log.client_log_config
-from utils import get_func_name
+import inspect
 
 
 lg = logging.getLogger('client')
 
 
+def _log(func):
+    def wrapper(*args, **kwargs):
+        lg.info(f'Вызов функции {func.__name__} с аргументами {args, kwargs}')
+        lg.info(f'Функция {func.__name__}() вызвана из функции {inspect.stack()[1][3]}')
+        return func(*args, **kwargs)
+    return wrapper
+
+
+@_log
 def outgoing_message():
     msg = {'action': 'presence', 'time': time.time()}
-    lg.info(f'Выполнена функция {get_func_name()} модуля {sys.argv[0]}')
     return json.dumps(msg).encode('utf-8')
 
 
+@_log
 def incoming_message(msg):
     dct = json.loads(msg.decode('utf-8'))
-    lg.info(f'Выполнена функция {get_func_name()} модуля {sys.argv[0]}')
     return dct
 
 

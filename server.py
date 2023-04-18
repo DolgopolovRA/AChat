@@ -1,3 +1,4 @@
+import inspect
 import sys
 from socket import *
 import json
@@ -7,6 +8,14 @@ import log.server_log_config
 from utils import get_func_name
 
 lg = logging.getLogger('server')
+
+
+def _log(func):
+    def wrapper(*args, **kwargs):
+        lg.info(f'Вызов функции {func.__name__} с аргументами {args, kwargs}')
+        lg.info(f'Функция {func.__name__}() вызвана из функции {inspect.stack()[1][3]}')
+        return func(*args, **kwargs)
+    return wrapper
 
 
 class PortError(Exception):
@@ -19,8 +28,8 @@ class AddrError(Exception):
         return 'Не указан адрес, который будет слушать сервер'
 
 
+@_log
 def incoming_message(msg):
-    lg.info(f'Выполнена функция {get_func_name()} модуля {sys.argv[0]}')
     msg_from_client = json.loads(msg.decode('utf-8'))
     if type(msg_from_client) is dict:
         if msg_from_client.get('action') == 'presence' and msg_from_client.get('time'):
@@ -28,8 +37,8 @@ def incoming_message(msg):
     return '', {'responce': 400, 'time': time.time()}
 
 
+@_log
 def outgoing_message(answer):
-    lg.info(f'Выполнена функция {get_func_name()} модуля {sys.argv[0]}')
     return json.dumps(answer).encode('utf-8')
 
 
