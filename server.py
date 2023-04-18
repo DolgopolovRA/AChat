@@ -2,6 +2,11 @@ import sys
 from socket import *
 import json
 import time
+import logging
+import log.server_log_config
+from utils import get_func_name
+
+lg = logging.getLogger('server')
 
 
 class PortError(Exception):
@@ -15,6 +20,7 @@ class AddrError(Exception):
 
 
 def incoming_message(msg):
+    lg.info(f'Выполнена функция {get_func_name()} модуля {sys.argv[0]}')
     msg_from_client = json.loads(msg.decode('utf-8'))
     if type(msg_from_client) is dict:
         if msg_from_client.get('action') == 'presence' and msg_from_client.get('time'):
@@ -23,6 +29,7 @@ def incoming_message(msg):
 
 
 def outgoing_message(answer):
+    lg.info(f'Выполнена функция {get_func_name()} модуля {sys.argv[0]}')
     return json.dumps(answer).encode('utf-8')
 
 
@@ -39,16 +46,16 @@ def main():
         else:
             raise AddrError
     except PortError as pe:
-        print(pe)
+        lg.exception(pe)
         sys.exit(1)
     except AddrError as ae:
-        print(ae)
+        lg.exception(ae)
         sys.exit(1)
     except ValueError:
-        print('номер порта вне диапазона (1024, 65535)')
+        lg.exception('номер порта вне диапазона (1024, 65535)')
         sys.exit(1)
     except IndexError:
-        print('после параметров "-p" и "-a" должны быть указаны значения')
+        lg.exception('после параметров "-p" и "-a" должны быть указаны значения')
         sys.exit(1)
 
     s = socket(AF_INET, SOCK_STREAM)
