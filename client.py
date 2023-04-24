@@ -44,9 +44,15 @@ def main():
         sys.exit(1)
     s = socket(AF_INET, SOCK_STREAM)
     s.connect((addr, port))
-    s.send(outgoing_message())
-    msg = s.recv(1024)
-    print(incoming_message(msg))
+    mode = input('Введите r для чтения, w для отправки сообщения - ')
+    if mode == 'r':
+        msg = s.recv(1024)
+        print(f'Получено сообщение: {incoming_message(msg)}')
+    elif mode == 'w':
+        s.send(outgoing_message())
+        print(f'Сообщение отправлено')
+    else:
+        print('Режим не выбран')
     s.close()
 
 
