@@ -1,4 +1,5 @@
 import inspect
+import select
 import sys
 from socket import *
 import json
@@ -15,6 +16,7 @@ def _log(func):
         lg.info(f'Вызов функции {func.__name__} с аргументами {args, kwargs}')
         lg.info(f'Функция {func.__name__}() вызвана из функции {inspect.stack()[1][3]}')
         return func(*args, **kwargs)
+
     return wrapper
 
 
@@ -67,18 +69,47 @@ def main():
         lg.exception('после параметров "-p" и "-a" должны быть указаны значения')
         sys.exit(1)
 
+    clients = []
+    request = []
     s = socket(AF_INET, SOCK_STREAM)
     s.bind((addr, port))
     s.listen(5)
-
+    s.settimeout(0.3)
     while True:
-        client, addr = s.accept()
-        msg = client.recv(1024)
-        msg_from_client, status = incoming_message(msg)
-        if msg_from_client:
-            print(msg_from_client)
-        client.send(outgoing_message(status))
-        client.close()
+        try:
+            client, addr = s.accept()
+        except OSError:
+            pass
+        else:
+            print(f'Получен запрос от {addr}')
+            clients.append(client)
+        finally:
+            read_client = []
+            write_client = []
+            try:
+                read_client, write_client, er = select.select(clients, clients, clients, 5)
+            except:
+                pass
+            for conn in read_client:
+                try:
+                    msg = conn.recv(1024)
+                    msg_from_client, status = incoming_message(msg)
+                except:
+                    clients.remove(conn)
+                else:
+                    if msg_from_client:
+                        print(f'Получено сообщение {msg_from_client}')
+                        request.append(msg_from_client)
+            for el in request:
+                for conn in write_client:
+                    try:
+                        conn.send(outgoing_message(el))
+                    except:
+                        pass
+                    finally:
+                        conn.close()
+                        clients.remove(conn)
+            request.clear()
 
 
 if __name__ == '__main__':
