@@ -33,10 +33,10 @@ class AddrError(Exception):
 @_log
 def incoming_message(msg):
     msg_from_client = json.loads(msg.decode('utf-8'))
-    if type(msg_from_client) is dict:
-        if msg_from_client.get('action') == 'presence' and msg_from_client.get('time'):
-            return msg_from_client, {'responce': 200, 'time': time.time()}
-    return '', {'responce': 400, 'time': time.time()}
+    #if type(msg_from_client) is dict:
+     #   if msg_from_client.get('action') == 'presence' and msg_from_client.get('time'):
+      #      return msg_from_client, {'responce': 200, 'time': time.time()}
+    return msg_from_client
 
 
 @_log
@@ -93,7 +93,8 @@ def main():
             for conn in read_client:
                 try:
                     msg = conn.recv(1024)
-                    msg_from_client, status = incoming_message(msg)
+                    msg_from_client = incoming_message(msg)
+                    write_client.remove(conn)
                 except:
                     clients.remove(conn)
                 else:
@@ -107,8 +108,7 @@ def main():
                     except:
                         pass
                     finally:
-                        conn.close()
-                        clients.remove(conn)
+                        pass
             request.clear()
 
 

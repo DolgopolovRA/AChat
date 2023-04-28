@@ -5,6 +5,7 @@ from socket import *
 import logging
 import log.client_log_config
 import inspect
+from threading import Thread, Lock
 
 
 lg = logging.getLogger('client')
@@ -19,8 +20,8 @@ def _log(func):
 
 
 @_log
-def outgoing_message():
-    msg = {'action': 'presence', 'time': time.time()}
+def outgoing_message(msg):
+    # msg = {'action': 'presence', 'time': time.time()}
     return json.dumps(msg).encode('utf-8')
 
 
@@ -28,6 +29,21 @@ def outgoing_message():
 def incoming_message(msg):
     dct = json.loads(msg.decode('utf-8'))
     return dct
+
+
+def send_msg(sock):
+    while True:
+        msg = input()
+        if msg:
+            sock.send(outgoing_message(msg))
+            print(f'Сообщение "{msg}" отправлено')
+
+
+def read_msg(sock):
+    while True:
+        msg = sock.recv(1024)
+        if msg:
+            print(f'Получено сообщение: {incoming_message(msg)}')
 
 
 def main():
@@ -44,16 +60,16 @@ def main():
         sys.exit(1)
     s = socket(AF_INET, SOCK_STREAM)
     s.connect((addr, port))
-    mode = input('Введите r для чтения, w для отправки сообщения - ')
-    if mode == 'r':
-        msg = s.recv(1024)
-        print(f'Получено сообщение: {incoming_message(msg)}')
-    elif mode == 'w':
-        s.send(outgoing_message())
-        print(f'Сообщение отправлено')
-    else:
-        print('Режим не выбран')
-    s.close()
+    t1 = Thread(target=send_msg, args=(s, ))
+    t1.daemon = True
+    t1.start()
+    t2 = Thread(target=read_msg, args=(s, ))
+    t2.daemon = True
+    t2.start()
+    t1.join()
+    t2.join()
+
+    # s.close()
 
 
 if __name__ == '__main__':
