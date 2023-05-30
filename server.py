@@ -8,6 +8,7 @@ import logging
 import log.server_log_config
 from utils import get_func_name
 from metaclass import ServerVerifier
+from database import ServerDb
 
 lg = logging.getLogger('server')
 
@@ -69,12 +70,14 @@ def srv_params():
 class Server(metaclass=ServerVerifier):
     port = Port()
 
-    def __init__(self, addr, l_port):
+    def __init__(self, addr, l_port, db):
         self.s = None
         self.port = l_port
         self.addr = addr
         self.clients = []
         self.request = []
+        self.db = db
+        self.online_clients = {}
 
     def init_sock(self):
         s = socket(AF_INET, SOCK_STREAM)
@@ -86,9 +89,6 @@ class Server(metaclass=ServerVerifier):
     @_log
     def incoming_message(self, msg):
         msg_from_client = json.loads(msg.decode('utf-8'))
-        # if type(msg_from_client) is dict:
-        #   if msg_from_client.get('action') == 'presence' and msg_from_client.get('time'):
-        #      return msg_from_client, {'responce': 200, 'time': time.time()}
         return msg_from_client
 
     @_log
@@ -105,8 +105,9 @@ class Server(metaclass=ServerVerifier):
             except OSError:
                 pass
             else:
-                print(f'Получен запрос от {addr}')
+                print(f'Получен запрос от {addr} в {time.time()}')
                 self.clients.append(client)
+                self.online_clients[client] = ''
             finally:
                 read_client = []
                 write_client = []
@@ -121,10 +122,22 @@ class Server(metaclass=ServerVerifier):
                         write_client.remove(conn)
                     except:
                         self.clients.remove(conn)
+                        self.online_clients.pop(conn, None)
                     else:
                         if msg_from_client:
                             print(f'Получено сообщение {msg_from_client}')
-                            self.request.append(msg_from_client)
+                            if type(msg_from_client) is dict:
+                                if msg_from_client.get('login') in self.online_clients.values():
+                                    conn.send(self.outgoing_message('Пользователь с таким именем уже есть в системе!'))
+                                    self.clients.remove(conn)
+                                    self.online_clients.pop(conn)
+                                    conn.close()
+                                else:
+                                    self.db.login(msg_from_client.get('login'), msg_from_client.get('addr'))
+                                    self.online_clients[conn] = msg_from_client.get('login')
+                                    conn.send(self.outgoing_message('Подключение к серверу выполнено успешно!'))
+                            else:
+                                self.request.append(msg_from_client)
                 for el in self.request:
                     for conn in write_client:
                         try:
@@ -137,9 +150,9 @@ class Server(metaclass=ServerVerifier):
 
 
 def main():
-
+    db = ServerDb()
     addr, port = srv_params()
-    srv = Server(addr, port)
+    srv = Server(addr, port, db)
     srv.srv_main()
 
 
