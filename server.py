@@ -7,6 +7,7 @@ import time
 import logging
 import log.server_log_config
 from utils import get_func_name
+from metaclass import ServerVerifier
 
 lg = logging.getLogger('server')
 
@@ -30,26 +31,20 @@ class AddrError(Exception):
         return 'Не указан адрес, который будет слушать сервер'
 
 
-@_log
-def incoming_message(msg):
-    msg_from_client = json.loads(msg.decode('utf-8'))
-    #if type(msg_from_client) is dict:
-     #   if msg_from_client.get('action') == 'presence' and msg_from_client.get('time'):
-      #      return msg_from_client, {'responce': 200, 'time': time.time()}
-    return msg_from_client
+class Port:
+    def __set_name__(self, owner, name):
+        self.name = name
+
+    def __set__(self, instance, value):
+        if value < 1024 or value > 65535 or type(value) != int:
+            raise PortError
+        instance.__dict__[self.name] = value
 
 
-@_log
-def outgoing_message(answer):
-    return json.dumps(answer).encode('utf-8')
-
-
-def main():
+def srv_params():
     try:
         if '-p' in sys.argv:
             port = int(sys.argv[sys.argv.index('-p') + 1])
-            if port < 1024 or port > 65535:
-                raise ValueError
         else:
             raise PortError
         if '-a' in sys.argv:
@@ -68,48 +63,84 @@ def main():
     except IndexError:
         lg.exception('после параметров "-p" и "-a" должны быть указаны значения')
         sys.exit(1)
+    return addr, port
 
-    clients = []
-    request = []
-    s = socket(AF_INET, SOCK_STREAM)
-    s.bind((addr, port))
-    s.listen(5)
-    s.settimeout(0.3)
-    while True:
-        try:
-            client, addr = s.accept()
-        except OSError:
-            pass
-        else:
-            print(f'Получен запрос от {addr}')
-            clients.append(client)
-        finally:
-            read_client = []
-            write_client = []
+
+class Server(metaclass=ServerVerifier):
+    port = Port()
+
+    def __init__(self, addr, l_port):
+        self.s = None
+        self.port = l_port
+        self.addr = addr
+        self.clients = []
+        self.request = []
+
+    def init_sock(self):
+        s = socket(AF_INET, SOCK_STREAM)
+        s.bind((self.addr, self.port))
+        self.s = s
+        self.s.listen(5)
+        self.s.settimeout(0.3)
+
+    @_log
+    def incoming_message(self, msg):
+        msg_from_client = json.loads(msg.decode('utf-8'))
+        # if type(msg_from_client) is dict:
+        #   if msg_from_client.get('action') == 'presence' and msg_from_client.get('time'):
+        #      return msg_from_client, {'responce': 200, 'time': time.time()}
+        return msg_from_client
+
+    @_log
+    def outgoing_message(self, answer):
+        return json.dumps(answer).encode('utf-8')
+
+    def srv_main(self):
+
+        self.init_sock()
+
+        while True:
             try:
-                read_client, write_client, er = select.select(clients, clients, clients, 5)
-            except:
+                client, addr = self.s.accept()
+            except OSError:
                 pass
-            for conn in read_client:
+            else:
+                print(f'Получен запрос от {addr}')
+                self.clients.append(client)
+            finally:
+                read_client = []
+                write_client = []
                 try:
-                    msg = conn.recv(1024)
-                    msg_from_client = incoming_message(msg)
-                    write_client.remove(conn)
+                    read_client, write_client, er = select.select(self.clients, self.clients, self.clients, 5)
                 except:
-                    clients.remove(conn)
-                else:
-                    if msg_from_client:
-                        print(f'Получено сообщение {msg_from_client}')
-                        request.append(msg_from_client)
-            for el in request:
-                for conn in write_client:
+                    pass
+                for conn in read_client:
                     try:
-                        conn.send(outgoing_message(el))
+                        msg = conn.recv(1024)
+                        msg_from_client = self.incoming_message(msg)
+                        write_client.remove(conn)
                     except:
-                        pass
-                    finally:
-                        pass
-            request.clear()
+                        self.clients.remove(conn)
+                    else:
+                        if msg_from_client:
+                            print(f'Получено сообщение {msg_from_client}')
+                            self.request.append(msg_from_client)
+                for el in self.request:
+                    for conn in write_client:
+                        try:
+                            conn.send(self.outgoing_message(el))
+                        except:
+                            pass
+                        finally:
+                            pass
+                self.request.clear()
+
+
+def main():
+
+    addr, port = srv_params()
+    srv = Server(addr, port)
+    srv.srv_main()
 
 
 if __name__ == '__main__':
