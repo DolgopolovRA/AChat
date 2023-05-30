@@ -37,14 +37,14 @@ def cln_params():
 
 class Client(metaclass=ClientVerifier):
 
-    def __init__(self, addr, port, s):
+    def __init__(self, addr, port, s, login):
         self.s = s
         self.addr = addr
         self.port = port
+        self.login = login
 
     @_log
     def outgoing_message(self, msg):
-        # msg = {'action': 'presence', 'time': time.time()}
         return json.dumps(msg).encode('utf-8')
 
     @_log
@@ -52,18 +52,21 @@ class Client(metaclass=ClientVerifier):
         dct = json.loads(msg.decode('utf-8'))
         return dct
 
-    def send_msg(self, sock):
+    def send_msg(self, sock, init=True):
         while True:
-            msg = input()
-            if msg:
-                sock.send(self.outgoing_message(msg))
-                print(f'Сообщение "{msg}" отправлено')
+            if init:
+                sock.send(self.outgoing_message({'action': 'presence', 'addr': self.addr, 'login': self.login}))
+                init = False
+            else:
+                msg = input()
+                if msg:
+                    sock.send(self.outgoing_message(f'{self.login}: {msg}'))
 
     def read_msg(self, sock):
         while True:
             msg = sock.recv(1024)
             if msg:
-                print(f'Получено сообщение: {self.incoming_message(msg)}')
+                print(self.incoming_message(msg))
 
     def cln_main(self):
 
@@ -79,10 +82,11 @@ class Client(metaclass=ClientVerifier):
 
 def main():
 
+    login = input('Введите логин: ')
     addr, port = cln_params()
     s = socket(AF_INET, SOCK_STREAM)
     s.connect((addr, port))
-    cl = Client(addr, port, s)
+    cl = Client(addr, port, s, login)
     cl.cln_main()
 
 
