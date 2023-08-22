@@ -7,6 +7,8 @@ import log.client_log_config
 import inspect
 from threading import Thread, Lock
 from metaclass import ClientVerifier
+from time import sleep
+from database import ClientDb
 
 
 lg = logging.getLogger('client')
@@ -37,11 +39,12 @@ def cln_params():
 
 class Client(metaclass=ClientVerifier):
 
-    def __init__(self, addr, port, s, login):
+    def __init__(self, addr, port, s, login, db):
         self.s = s
         self.addr = addr
         self.port = port
         self.login = login
+        self.db = db
 
     @_log
     def outgoing_message(self, msg):
@@ -56,17 +59,27 @@ class Client(metaclass=ClientVerifier):
         while True:
             if init:
                 sock.send(self.outgoing_message({'action': 'presence', 'addr': self.addr, 'login': self.login}))
+                sleep(1)
+                sock.send(self.outgoing_message({"action": "get_contacts", "time": time.time(), "user_login": self.login}))
                 init = False
             else:
                 msg = input()
-                if msg:
-                    sock.send(self.outgoing_message(f'{self.login}: {msg}'))
+                if msg == 'contact_list':
+                    sock.send(self.outgoing_message({"action": "get_contacts", "time": time.time(), "user_login": self.login}))
+                else:
+                    sock.send(self.outgoing_message(f'{self.login}:{msg}'))
 
     def read_msg(self, sock):
         while True:
             msg = sock.recv(1024)
-            if msg:
-                print(self.incoming_message(msg))
+            msg = self.incoming_message(msg)
+            if type(msg) is dict:
+                if msg.get('response') == '202':
+                    sp = msg.get('alert')
+                    self.db.init_contacts_list(sp, self.login)
+            else:
+                print(msg)
+                self.db.add_to_message_history(msg)
 
     def cln_main(self):
 
@@ -81,12 +94,12 @@ class Client(metaclass=ClientVerifier):
 
 
 def main():
-
+    db = ClientDb()
     login = input('Введите логин: ')
     addr, port = cln_params()
     s = socket(AF_INET, SOCK_STREAM)
     s.connect((addr, port))
-    cl = Client(addr, port, s, login)
+    cl = Client(addr, port, s, login, db)
     cl.cln_main()
 
 

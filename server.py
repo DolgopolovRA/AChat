@@ -5,6 +5,8 @@ from socket import *
 import json
 import time
 import logging
+from typing import List, Any
+
 import log.server_log_config
 from utils import get_func_name
 from metaclass import ServerVerifier
@@ -77,7 +79,7 @@ class Server(metaclass=ServerVerifier):
         self.clients = []
         self.request = []
         self.db = db
-        self.online_clients = {}
+        self.online_clients_socket = {}
 
     def init_sock(self):
         s = socket(AF_INET, SOCK_STREAM)
@@ -107,7 +109,7 @@ class Server(metaclass=ServerVerifier):
             else:
                 print(f'Получен запрос от {addr} в {time.time()}')
                 self.clients.append(client)
-                self.online_clients[client] = ''
+                self.online_clients_socket[client] = ''
             finally:
                 read_client = []
                 write_client = []
@@ -121,21 +123,26 @@ class Server(metaclass=ServerVerifier):
                         msg_from_client = self.incoming_message(msg)
                         write_client.remove(conn)
                     except:
-                        self.clients.remove(conn)
-                        self.online_clients.pop(conn, None)
+                        self. clients.remove(conn)
+                        login_del = self.online_clients_socket.pop(conn, None)
+                        if login_del:
+                            self.db.del_active_users(login_del)
                     else:
                         if msg_from_client:
                             print(f'Получено сообщение {msg_from_client}')
                             if type(msg_from_client) is dict:
-                                if msg_from_client.get('login') in self.online_clients.values():
+                                if msg_from_client.get('login') in self.online_clients_socket.values():
                                     conn.send(self.outgoing_message('Пользователь с таким именем уже есть в системе!'))
                                     self.clients.remove(conn)
-                                    self.online_clients.pop(conn)
+                                    self.online_clients_socket.pop(conn)
+                                    self.db.del_active_users(msg_from_client.get('login'))
                                     conn.close()
+                                elif msg_from_client.get('action') == 'get_contacts':
+                                    conn.send(self.outgoing_message({'response': '202', 'alert': f'{list(self.online_clients_socket.values())}'}))
                                 else:
                                     self.db.login(msg_from_client.get('login'), msg_from_client.get('addr'))
-                                    self.online_clients[conn] = msg_from_client.get('login')
-                                    conn.send(self.outgoing_message('Подключение к серверу выполнено успешно!'))
+                                    self.online_clients_socket[conn] = msg_from_client.get('login')
+                                    # conn.send(self.outgoing_message('Подключение к серверу выполнено успешно!'))
                             else:
                                 self.request.append(msg_from_client)
                 for el in self.request:
